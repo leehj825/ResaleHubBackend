@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.DS_Store
+resalehub.db
+.env
+# Ignore everything in listings...
+media/listings/*
+
+# ...EXCEPT this one empty file
+!media/listings/.gitkeep
