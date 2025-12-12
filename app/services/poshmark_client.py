@@ -77,6 +77,8 @@ def get_browser_launch_args():
         "--disable-dev-shm-usage",  # 메모리 부족 방지
         "--disable-accelerated-2d-canvas",
         "--disable-gpu",            # GPU 없는 환경 최적화
+        "--disable-blink-features=AutomationControlled",
+        "--disable-infobars",
         "--single-process",         # 리소스 절약 (선택사항)
     ]
 
@@ -436,7 +438,7 @@ async def publish_listing(
                     context = await browser.new_context(
                         storage_state=session_file_path,
                         viewport={"width": 1280, "height": 720},
-                        user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
+                        user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36"
                     )
                     print(f">>> Loaded existing session for user {user.id}")
                 except Exception as e:
@@ -445,7 +447,7 @@ async def publish_listing(
             if not context:
                 context = await browser.new_context(
                     viewport={"width": 1280, "height": 720},
-                    user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
+                    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36"
                 )
             
             page = await context.new_page()
@@ -512,7 +514,7 @@ async def get_poshmark_inventory(db: Session, user: User) -> List[dict]:
             )
             context = await browser.new_context(
                 viewport={"width": 1280, "height": 720},
-                user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36"
             )
             page = await context.new_page()
             
@@ -561,7 +563,7 @@ async def get_poshmark_inventory(db: Session, user: User) -> List[dict]:
     
 
 # Updated function to use cookies
-async def verify_poshmark_credentials(username: str, cookie_json: str, headless: bool = True) -> bool:
+async def verify_poshmark_credentials_with_cookies(username: str, cookie_json: str, headless: bool = True) -> bool:
     """
     Verify credentials using SAVED COOKIES (No password typing).
     """
@@ -576,20 +578,28 @@ async def verify_poshmark_credentials(username: str, cookie_json: str, headless:
         
         # Create context and LOAD COOKIES immediately
         context = await browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) ...", # Match your real UA
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
         )
-        await context.add_cookies(cookies) # <--- MAGIC HAPPENS HERE
-        
+        # Playwright requires cookies to include 'domain' or 'url'. The stored cookie JSON must be compatible.
+        try:
+            await context.add_cookies(cookies) # <--- MAGIC HAPPENS HERE
+        except Exception as e:
+            print(f">>> Failed to add cookies: {e}")
+            await browser.close()
+            return False
+
         page = await context.new_page()
-        
+
         # Now just go to the feed. If cookies work, we are logged in!
         print(">>> Navigating to Feed with cookies...")
         await page.goto("https://poshmark.com/feed", timeout=20000)
-        
+
         # Check if we are logged in
         if "login" not in page.url and await page.query_selector('.header-user-profile, a[href*="/user/"]'):
-             print(">>> Cookie Login Successful!")
-             return True
+            print(">>> Cookie Login Successful!")
+            await browser.close()
+            return True
         else:
-             print(">>> Cookie Login Failed (Expired?)")
-             return False
+            print(">>> Cookie Login Failed (Expired?)")
+            await browser.close()
+            return False
